@@ -29,7 +29,7 @@ A WordPress plugin that forces users to login before viewing pages, with options
 
 ## Installation
 
-1. Download or clone this repository
+1. Download or clone this repository from [GitHub](https://github.com/absolutodesigns/force-login-view)
 2. Upload the `force-login-view` folder to the `/wp-content/plugins/` directory
 3. Activate the plugin through the 'Plugins' menu in WordPress
 4. Go to Settings > Force Login View to configure the plugin
@@ -90,7 +90,7 @@ Select specific users that can bypass the login requirement. These users can vie
 
 ## Support
 
-For issues, questions, or contributions, please visit the plugin repository on GitHub.
+For issues, questions, or contributions, please visit the plugin repository on [GitHub](https://github.com/absolutodesigns/force-login-view).
 
 ## License
 
