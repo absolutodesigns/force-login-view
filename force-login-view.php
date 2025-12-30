@@ -8,12 +8,10 @@
  * Author URI: http://absolutodesigns.com
  * Requires at least: 5.0
  * Requires PHP: 7.0
- * Tested up to: 6.4
- * Network: false
+ * Tested up to: 6.9
  * License: GPL v2 or later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain: force-login-view
- * Domain Path: /languages
  */
 
 // Exit if accessed directly
@@ -26,6 +24,7 @@ if (version_compare(get_bloginfo('version'), '5.0', '<')) {
     add_action('admin_notices', function() {
         echo '<div class="error"><p>';
         printf(
+            /* translators: %s: WordPress version number */
             esc_html__('Force Login to View Page requires WordPress 5.0 or higher. You are running WordPress %s. Please upgrade WordPress to activate this plugin.', 'force-login-view'),
             esc_html(get_bloginfo('version'))
         );
@@ -39,6 +38,7 @@ if (version_compare(PHP_VERSION, '7.0', '<')) {
     add_action('admin_notices', function() {
         echo '<div class="error"><p>';
         printf(
+            /* translators: %s: PHP version number */
             esc_html__('Force Login to View Page requires PHP 7.0 or higher. You are running PHP %s. Please upgrade PHP to activate this plugin.', 'force-login-view'),
             esc_html(PHP_VERSION)
         );
@@ -392,8 +392,15 @@ class Force_Login_View {
             return false;
         }
         
-        $key_param = isset($_GET['flv_bypass']) ? sanitize_text_field(wp_unslash($_GET['flv_bypass'])) : '';
-        return $key_param === $bypass_key;
+        // Validate bypass key from URL parameter (public-facing, no nonce needed)
+        // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Public URL parameter, not form data
+        if (!isset($_GET['flv_bypass'])) {
+            return false;
+        }
+        // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Public URL parameter, not form data
+        $key_param = sanitize_text_field(wp_unslash($_GET['flv_bypass']));
+        // Use hash_equals for timing-safe comparison
+        return hash_equals($bypass_key, $key_param);
     }
     
     /**
@@ -573,7 +580,7 @@ class Force_Login_View {
      * Add settings link to plugin actions
      */
     public function add_plugin_action_links($links) {
-        $settings_link = '<a href="' . admin_url('options-general.php?page=force-login-view') . '">' . __('Settings', 'force-login-view') . '</a>';
+        $settings_link = '<a href="' . esc_url(admin_url('options-general.php?page=force-login-view')) . '">' . esc_html__('Settings', 'force-login-view') . '</a>';
         array_unshift($links, $settings_link);
         return $links;
     }
@@ -601,10 +608,10 @@ class Force_Login_View {
         if ($enabled === '1') {
             $wp_admin_bar->add_node(array(
                 'id' => 'flv-active',
-                'title' => '<span class="ab-icon dashicons-lock" style="margin-top: 3px;"></span> ' . __('Force Login Active', 'force-login-view'),
-                'href' => admin_url('options-general.php?page=force-login-view'),
+                'title' => '<span class="ab-icon dashicons-lock" style="margin-top: 3px;"></span> ' . esc_html__('Force Login Active', 'force-login-view'),
+                'href' => esc_url(admin_url('options-general.php?page=force-login-view')),
                 'meta' => array(
-                    'title' => __('Force Login to View Page is active', 'force-login-view')
+                    'title' => esc_html__('Force Login to View Page is active', 'force-login-view')
                 )
             ));
         }
@@ -1568,7 +1575,7 @@ class Force_Login_View {
         if (isset($_POST['flv_save_settings']) && check_admin_referer('flv_settings_nonce')) {
             // Verify user capability
             if (!current_user_can('manage_options')) {
-                wp_die(__('You do not have sufficient permissions to access this page.', 'force-login-view'));
+                wp_die(esc_html__('You do not have sufficient permissions to access this page.', 'force-login-view'));
             }
             
             // Save plugin enabled status
@@ -1578,35 +1585,45 @@ class Force_Login_View {
             // Save excluded pages - sanitize as integers
             $excluded_pages = array();
             if (isset($_POST['flv_excluded_pages']) && is_array($_POST['flv_excluded_pages'])) {
-                $excluded_pages = array_map('absint', array_map('wp_unslash', $_POST['flv_excluded_pages']));
+                // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Sanitized via array_map('absint')
+                $unslashed_pages = wp_unslash($_POST['flv_excluded_pages']);
+                $excluded_pages = array_map('absint', $unslashed_pages);
             }
             update_option('flv_excluded_pages', $excluded_pages);
             
             // Save excluded templates - sanitize text fields
             $excluded_templates = array();
             if (isset($_POST['flv_excluded_templates']) && is_array($_POST['flv_excluded_templates'])) {
-                $excluded_templates = array_map('sanitize_text_field', array_map('wp_unslash', $_POST['flv_excluded_templates']));
+                // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Sanitized via array_map('sanitize_text_field')
+                $unslashed_templates = wp_unslash($_POST['flv_excluded_templates']);
+                $excluded_templates = array_map('sanitize_text_field', $unslashed_templates);
             }
             update_option('flv_excluded_templates', $excluded_templates);
             
             // Save excluded post types - sanitize text fields
             $excluded_post_types = array();
             if (isset($_POST['flv_excluded_post_types']) && is_array($_POST['flv_excluded_post_types'])) {
-                $excluded_post_types = array_map('sanitize_key', array_map('wp_unslash', $_POST['flv_excluded_post_types']));
+                // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Sanitized via array_map('sanitize_key')
+                $unslashed_post_types = wp_unslash($_POST['flv_excluded_post_types']);
+                $excluded_post_types = array_map('sanitize_key', $unslashed_post_types);
             }
             update_option('flv_excluded_post_types', $excluded_post_types);
             
             // Save excluded categories - sanitize as integers
             $excluded_categories = array();
             if (isset($_POST['flv_excluded_categories']) && is_array($_POST['flv_excluded_categories'])) {
-                $excluded_categories = array_map('absint', array_map('wp_unslash', $_POST['flv_excluded_categories']));
+                // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Sanitized via array_map('absint')
+                $unslashed_categories = wp_unslash($_POST['flv_excluded_categories']);
+                $excluded_categories = array_map('absint', $unslashed_categories);
             }
             update_option('flv_excluded_categories', $excluded_categories);
             
             // Save excluded tags - sanitize as integers
             $excluded_tags = array();
             if (isset($_POST['flv_excluded_tags']) && is_array($_POST['flv_excluded_tags'])) {
-                $excluded_tags = array_map('absint', array_map('wp_unslash', $_POST['flv_excluded_tags']));
+                // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Sanitized via array_map('absint')
+                $unslashed_tags = wp_unslash($_POST['flv_excluded_tags']);
+                $excluded_tags = array_map('absint', $unslashed_tags);
             }
             update_option('flv_excluded_tags', $excluded_tags);
             
@@ -1621,14 +1638,18 @@ class Force_Login_View {
             // Save bypass roles - sanitize keys
             $bypass_roles = array();
             if (isset($_POST['flv_bypass_roles']) && is_array($_POST['flv_bypass_roles'])) {
-                $bypass_roles = array_map('sanitize_key', array_map('wp_unslash', $_POST['flv_bypass_roles']));
+                // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Sanitized via array_map('sanitize_key')
+                $unslashed_roles = wp_unslash($_POST['flv_bypass_roles']);
+                $bypass_roles = array_map('sanitize_key', $unslashed_roles);
             }
             update_option('flv_bypass_roles', $bypass_roles);
             
             // Save bypass users - sanitize as integers
             $bypass_users = array();
             if (isset($_POST['flv_bypass_users']) && is_array($_POST['flv_bypass_users'])) {
-                $bypass_users = array_map('absint', array_map('wp_unslash', $_POST['flv_bypass_users']));
+                // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Sanitized via array_map('absint')
+                $unslashed_users = wp_unslash($_POST['flv_bypass_users']);
+                $bypass_users = array_map('absint', $unslashed_users);
             }
             update_option('flv_bypass_users', $bypass_users);
             
@@ -1755,7 +1776,7 @@ class Force_Login_View {
                         <?php echo esc_html(get_admin_page_title()); ?>
                         <a href="http://absolutodesigns.com/plugins" target="_blank" rel="noopener noreferrer" class="flv-absoluto-link">absoluto designs</a>
                     </h1>
-                    <p><?php _e('Configure which pages require login and which users can bypass the requirement.', 'force-login-view'); ?></p>
+                    <p><?php esc_html_e('Configure which pages require login and which users can bypass the requirement.', 'force-login-view'); ?></p>
                 </div>
                 
                 <form method="post" action="">
@@ -1764,17 +1785,17 @@ class Force_Login_View {
                     <!-- General Settings Section - Full Width -->
                     <div class="flv-card flv-full-width">
                         <div class="flv-card-header" style="display: flex; justify-content: space-between; align-items: center;">
-                            <h2 style="margin: 0;"><?php _e('General Settings', 'force-login-view'); ?></h2>
-                            <?php submit_button(__('Save Changes', 'force-login-view'), 'primary', 'flv_save_settings', false); ?>
+                            <h2 style="margin: 0;"><?php esc_html_e('General Settings', 'force-login-view'); ?></h2>
+                            <?php submit_button(esc_html__('Save Changes', 'force-login-view'), 'primary', 'flv_save_settings', false); ?>
                         </div>
                         <div class="flv-card-body">
                             <div class="flv-form-group">
                                 <label>
                                     <input type="checkbox" name="flv_enabled" value="1" <?php checked($enabled, '1'); ?>>
-                                    <?php _e('Enable Force Login', 'force-login-view'); ?>
+                                    <?php esc_html_e('Enable Force Login', 'force-login-view'); ?>
                                 </label>
                                 <p class="description">
-                                    <?php _e('Uncheck to temporarily disable the login requirement without deactivating the plugin.', 'force-login-view'); ?>
+                                    <?php esc_html_e('Uncheck to temporarily disable the login requirement without deactivating the plugin.', 'force-login-view'); ?>
                                 </p>
                             </div>
                         </div>
@@ -1787,12 +1808,12 @@ class Force_Login_View {
                             <!-- Excluded Pages Section -->
                             <div class="flv-card">
                         <div class="flv-card-header" style="display: flex; justify-content: space-between; align-items: center;">
-                            <h2 style="margin: 0;"><?php _e('Excluded Pages', 'force-login-view'); ?></h2>
-                            <?php submit_button(__('Save Changes', 'force-login-view'), 'primary', 'flv_save_settings', false); ?>
+                            <h2 style="margin: 0;"><?php esc_html_e('Excluded Pages', 'force-login-view'); ?></h2>
+                            <?php submit_button(esc_html__('Save Changes', 'force-login-view'), 'primary', 'flv_save_settings', false); ?>
                         </div>
                         <div class="flv-card-body">
                             <div class="flv-form-group">
-                                <label for="flv_excluded_pages"><?php _e('Pages Accessible Without Login', 'force-login-view'); ?></label>
+                                <label for="flv_excluded_pages"><?php esc_html_e('Pages Accessible Without Login', 'force-login-view'); ?></label>
                                 <select id="flv_excluded_pages" name="flv_excluded_pages[]" multiple="multiple">
                                     <?php if (!empty($all_pages)) : ?>
                                         <?php foreach ($all_pages as $page) : ?>
@@ -1801,11 +1822,11 @@ class Force_Login_View {
                                             </option>
                                         <?php endforeach; ?>
                                     <?php else : ?>
-                                        <option disabled><?php _e('No pages found.', 'force-login-view'); ?></option>
+                                        <option disabled><?php esc_html_e('No pages found.', 'force-login-view'); ?></option>
                                     <?php endif; ?>
                                 </select>
                                 <p class="description">
-                                    <?php _e('Select pages that should be publicly accessible without requiring login. Leave empty to require login for all pages.', 'force-login-view'); ?>
+                                    <?php esc_html_e('Select pages that should be publicly accessible without requiring login. Leave empty to require login for all pages.', 'force-login-view'); ?>
                                 </p>
                             </div>
                         </div>
@@ -1815,12 +1836,12 @@ class Force_Login_View {
                     <?php if (!empty($all_templates)) : ?>
                     <div class="flv-card">
                         <div class="flv-card-header" style="display: flex; justify-content: space-between; align-items: center;">
-                            <h2 style="margin: 0;"><?php _e('Excluded Page Templates', 'force-login-view'); ?></h2>
-                            <?php submit_button(__('Save Changes', 'force-login-view'), 'primary', 'flv_save_settings', false); ?>
+                            <h2 style="margin: 0;"><?php esc_html_e('Excluded Page Templates', 'force-login-view'); ?></h2>
+                            <?php submit_button(esc_html__('Save Changes', 'force-login-view'), 'primary', 'flv_save_settings', false); ?>
                         </div>
                         <div class="flv-card-body">
                             <div class="flv-form-group">
-                                <label for="flv_excluded_templates"><?php _e('Page Templates Accessible Without Login', 'force-login-view'); ?></label>
+                                <label for="flv_excluded_templates"><?php esc_html_e('Page Templates Accessible Without Login', 'force-login-view'); ?></label>
                                 <select id="flv_excluded_templates" name="flv_excluded_templates[]" multiple="multiple">
                                     <?php foreach ($all_templates as $template_name => $template_filename) : ?>
                                         <option value="<?php echo esc_attr($template_filename); ?>" <?php selected(in_array($template_filename, $excluded_templates)); ?>>
@@ -1829,7 +1850,7 @@ class Force_Login_View {
                                     <?php endforeach; ?>
                                 </select>
                                 <p class="description">
-                                    <?php _e('Select page templates that should be publicly accessible. All pages using these templates will be accessible without login.', 'force-login-view'); ?>
+                                    <?php esc_html_e('Select page templates that should be publicly accessible. All pages using these templates will be accessible without login.', 'force-login-view'); ?>
                                 </p>
                             </div>
                         </div>
@@ -1839,12 +1860,12 @@ class Force_Login_View {
                     <!-- Excluded Post Types Section -->
                     <div class="flv-card">
                         <div class="flv-card-header" style="display: flex; justify-content: space-between; align-items: center;">
-                            <h2 style="margin: 0;"><?php _e('Excluded Post Types', 'force-login-view'); ?></h2>
-                            <?php submit_button(__('Save Changes', 'force-login-view'), 'primary', 'flv_save_settings', false); ?>
+                            <h2 style="margin: 0;"><?php esc_html_e('Excluded Post Types', 'force-login-view'); ?></h2>
+                            <?php submit_button(esc_html__('Save Changes', 'force-login-view'), 'primary', 'flv_save_settings', false); ?>
                         </div>
                         <div class="flv-card-body">
                             <div class="flv-form-group">
-                                <label for="flv_excluded_post_types"><?php _e('Post Types Accessible Without Login', 'force-login-view'); ?></label>
+                                <label for="flv_excluded_post_types"><?php esc_html_e('Post Types Accessible Without Login', 'force-login-view'); ?></label>
                                 <select id="flv_excluded_post_types" name="flv_excluded_post_types[]" multiple="multiple">
                                     <?php foreach ($post_types as $post_type) : ?>
                                         <option value="<?php echo esc_attr($post_type->name); ?>" <?php selected(in_array($post_type->name, $excluded_post_types)); ?>>
@@ -1853,7 +1874,7 @@ class Force_Login_View {
                                     <?php endforeach; ?>
                                 </select>
                                 <p class="description">
-                                    <?php _e('Select post types that should be publicly accessible. All posts of selected types will be accessible without login.', 'force-login-view'); ?>
+                                    <?php esc_html_e('Select post types that should be publicly accessible. All posts of selected types will be accessible without login.', 'force-login-view'); ?>
                                 </p>
                             </div>
                         </div>
@@ -1863,12 +1884,12 @@ class Force_Login_View {
                     <?php if (!empty($categories)) : ?>
                     <div class="flv-card">
                         <div class="flv-card-header" style="display: flex; justify-content: space-between; align-items: center;">
-                            <h2 style="margin: 0;"><?php _e('Excluded Categories', 'force-login-view'); ?></h2>
-                            <?php submit_button(__('Save Changes', 'force-login-view'), 'primary', 'flv_save_settings', false); ?>
+                            <h2 style="margin: 0;"><?php esc_html_e('Excluded Categories', 'force-login-view'); ?></h2>
+                            <?php submit_button(esc_html__('Save Changes', 'force-login-view'), 'primary', 'flv_save_settings', false); ?>
                         </div>
                         <div class="flv-card-body">
                             <div class="flv-form-group">
-                                <label for="flv_excluded_categories"><?php _e('Categories Accessible Without Login', 'force-login-view'); ?></label>
+                                <label for="flv_excluded_categories"><?php esc_html_e('Categories Accessible Without Login', 'force-login-view'); ?></label>
                                 <select id="flv_excluded_categories" name="flv_excluded_categories[]" multiple="multiple">
                                     <?php foreach ($categories as $category) : ?>
                                         <option value="<?php echo esc_attr($category->term_id); ?>" <?php selected(in_array($category->term_id, $excluded_categories)); ?>>
@@ -1877,7 +1898,7 @@ class Force_Login_View {
                                     <?php endforeach; ?>
                                 </select>
                                 <p class="description">
-                                    <?php _e('Select categories that should be publicly accessible. Posts in these categories will be accessible without login.', 'force-login-view'); ?>
+                                    <?php esc_html_e('Select categories that should be publicly accessible. Posts in these categories will be accessible without login.', 'force-login-view'); ?>
                                 </p>
                             </div>
                         </div>
@@ -1888,12 +1909,12 @@ class Force_Login_View {
                     <?php if (!empty($tags)) : ?>
                     <div class="flv-card">
                         <div class="flv-card-header" style="display: flex; justify-content: space-between; align-items: center;">
-                            <h2 style="margin: 0;"><?php _e('Excluded Tags', 'force-login-view'); ?></h2>
-                            <?php submit_button(__('Save Changes', 'force-login-view'), 'primary', 'flv_save_settings', false); ?>
+                            <h2 style="margin: 0;"><?php esc_html_e('Excluded Tags', 'force-login-view'); ?></h2>
+                            <?php submit_button(esc_html__('Save Changes', 'force-login-view'), 'primary', 'flv_save_settings', false); ?>
                         </div>
                         <div class="flv-card-body">
                             <div class="flv-form-group">
-                                <label for="flv_excluded_tags"><?php _e('Tags Accessible Without Login', 'force-login-view'); ?></label>
+                                <label for="flv_excluded_tags"><?php esc_html_e('Tags Accessible Without Login', 'force-login-view'); ?></label>
                                 <select id="flv_excluded_tags" name="flv_excluded_tags[]" multiple="multiple">
                                     <?php foreach ($tags as $tag) : ?>
                                         <option value="<?php echo esc_attr($tag->term_id); ?>" <?php selected(in_array($tag->term_id, $excluded_tags)); ?>>
@@ -1902,7 +1923,7 @@ class Force_Login_View {
                                     <?php endforeach; ?>
                                 </select>
                                 <p class="description">
-                                    <?php _e('Select tags that should be publicly accessible. Posts with these tags will be accessible without login.', 'force-login-view'); ?>
+                                    <?php esc_html_e('Select tags that should be publicly accessible. Posts with these tags will be accessible without login.', 'force-login-view'); ?>
                                 </p>
                             </div>
                         </div>
@@ -1912,44 +1933,44 @@ class Force_Login_View {
                     <!-- RSS & API Exclusion Section -->
                     <div class="flv-card">
                         <div class="flv-card-header" style="display: flex; justify-content: space-between; align-items: center;">
-                            <h2 style="margin: 0;"><?php _e('RSS & API Settings', 'force-login-view'); ?></h2>
-                            <?php submit_button(__('Save Changes', 'force-login-view'), 'primary', 'flv_save_settings', false); ?>
+                            <h2 style="margin: 0;"><?php esc_html_e('RSS & API Settings', 'force-login-view'); ?></h2>
+                            <?php submit_button(esc_html__('Save Changes', 'force-login-view'), 'primary', 'flv_save_settings', false); ?>
                         </div>
                         <div class="flv-card-body">
                             <div class="flv-form-group">
                                 <label>
                                     <input type="checkbox" name="flv_exclude_rss" value="1" <?php checked($exclude_rss, '1'); ?>>
-                                    <?php _e('Exclude RSS Feeds', 'force-login-view'); ?>
+                                    <?php esc_html_e('Exclude RSS Feeds', 'force-login-view'); ?>
                                 </label>
                                 <p class="description">
-                                    <?php _e('Allow RSS feeds to be accessible without login. This is useful for feed readers and syndication.', 'force-login-view'); ?>
+                                    <?php esc_html_e('Allow RSS feeds to be accessible without login. This is useful for feed readers and syndication.', 'force-login-view'); ?>
                                 </p>
                             </div>
                             <div class="flv-form-group">
                                 <label>
                                     <input type="checkbox" name="flv_exclude_rest_api" value="1" <?php checked($exclude_rest_api, '1'); ?>>
-                                    <?php _e('Exclude REST API', 'force-login-view'); ?>
+                                    <?php esc_html_e('Exclude REST API', 'force-login-view'); ?>
                                 </label>
                                 <p class="description">
-                                    <?php _e('Allow WordPress REST API endpoints to be accessible without login. Useful for headless WordPress setups.', 'force-login-view'); ?>
+                                    <?php esc_html_e('Allow WordPress REST API endpoints to be accessible without login. Useful for headless WordPress setups.', 'force-login-view'); ?>
                                 </p>
                             </div>
                             <div class="flv-form-group">
                                 <label>
                                     <input type="checkbox" name="flv_exclude_ajax" value="1" <?php checked($exclude_ajax, '1'); ?>>
-                                    <?php _e('Exclude AJAX Requests', 'force-login-view'); ?>
+                                    <?php esc_html_e('Exclude AJAX Requests', 'force-login-view'); ?>
                                 </label>
                                 <p class="description">
-                                    <?php _e('Allow AJAX requests to bypass login requirement. Useful for frontend interactions that don\'t require authentication.', 'force-login-view'); ?>
+                                    <?php esc_html_e('Allow AJAX requests to bypass login requirement. Useful for frontend interactions that don\'t require authentication.', 'force-login-view'); ?>
                                 </p>
                             </div>
                             <div class="flv-form-group">
                                 <label>
                                     <input type="checkbox" name="flv_exclude_archives" value="1" <?php checked($exclude_archives, '1'); ?>>
-                                    <?php _e('Exclude Archive & Search Pages', 'force-login-view'); ?>
+                                    <?php esc_html_e('Exclude Archive & Search Pages', 'force-login-view'); ?>
                                 </label>
                                 <p class="description">
-                                    <?php _e('Allow archive pages, search results, and 404 pages to be accessible without login.', 'force-login-view'); ?>
+                                    <?php esc_html_e('Allow archive pages, search results, and 404 pages to be accessible without login.', 'force-login-view'); ?>
                                 </p>
                             </div>
                         </div>
@@ -1958,19 +1979,19 @@ class Force_Login_View {
                     <!-- IP Whitelist Section -->
                     <div class="flv-card">
                         <div class="flv-card-header" style="display: flex; justify-content: space-between; align-items: center;">
-                            <h2 style="margin: 0;"><?php _e('IP Whitelist', 'force-login-view'); ?></h2>
-                            <?php submit_button(__('Save Changes', 'force-login-view'), 'primary', 'flv_save_settings', false); ?>
+                            <h2 style="margin: 0;"><?php esc_html_e('IP Whitelist', 'force-login-view'); ?></h2>
+                            <?php submit_button(esc_html__('Save Changes', 'force-login-view'), 'primary', 'flv_save_settings', false); ?>
                         </div>
                         <div class="flv-card-body">
                             <div class="flv-form-group">
-                                <label for="flv_whitelist_ips"><?php _e('Whitelisted IP Addresses', 'force-login-view'); ?></label>
+                                <label for="flv_whitelist_ips"><?php esc_html_e('Whitelisted IP Addresses', 'force-login-view'); ?></label>
                                 <textarea id="flv_whitelist_ips" name="flv_whitelist_ips" rows="5" placeholder="192.168.1.1&#10;10.0.0.0/8&#10;172.16.0.0/12" style="width: 100%; padding: 8px; border: 1px solid var(--google-border); border-radius: 4px; font-family: monospace;"><?php echo esc_textarea($whitelist_ips); ?></textarea>
                                 <p class="description">
-                                    <?php _e('Enter IP addresses (one per line) that should bypass login requirement. Supports CIDR notation (e.g., 192.168.1.0/24).', 'force-login-view'); ?>
-                                    <br><strong><?php _e('Your current IP:', 'force-login-view'); ?></strong> 
+                                    <?php esc_html_e('Enter IP addresses (one per line) that should bypass login requirement. Supports CIDR notation (e.g., 192.168.1.0/24).', 'force-login-view'); ?>
+                                    <br><strong><?php esc_html_e('Your current IP:', 'force-login-view'); ?></strong> 
                                     <code id="flv-current-ip" data-ip="<?php echo esc_attr($current_ip_display); ?>"><?php echo esc_html($current_ip_display); ?></code>
                                     <button type="button" id="flv-add-current-ip" class="button button-small" style="margin-left: 8px;">
-                                        <?php _e('Add to Whitelist', 'force-login-view'); ?>
+                                        <?php esc_html_e('Add to Whitelist', 'force-login-view'); ?>
                                     </button>
                                 </p>
                             </div>
@@ -1982,12 +2003,12 @@ class Force_Login_View {
                             <!-- Bypass Roles Section -->
                             <div class="flv-card">
                         <div class="flv-card-header" style="display: flex; justify-content: space-between; align-items: center;">
-                            <h2 style="margin: 0;"><?php _e('Bypass Roles', 'force-login-view'); ?></h2>
-                            <?php submit_button(__('Save Changes', 'force-login-view'), 'primary', 'flv_save_settings', false); ?>
+                            <h2 style="margin: 0;"><?php esc_html_e('Bypass Roles', 'force-login-view'); ?></h2>
+                            <?php submit_button(esc_html__('Save Changes', 'force-login-view'), 'primary', 'flv_save_settings', false); ?>
                         </div>
                         <div class="flv-card-body">
                             <div class="flv-form-group">
-                                <label for="flv_bypass_roles"><?php _e('User Roles That Can Bypass Login', 'force-login-view'); ?></label>
+                                <label for="flv_bypass_roles"><?php esc_html_e('User Roles That Can Bypass Login', 'force-login-view'); ?></label>
                                 <select id="flv_bypass_roles" name="flv_bypass_roles[]" multiple="multiple">
                                     <?php foreach ($all_roles as $role_key => $role_name) : ?>
                                         <option value="<?php echo esc_attr($role_key); ?>" <?php selected(in_array($role_key, $bypass_roles)); ?>>
@@ -1996,7 +2017,7 @@ class Force_Login_View {
                                     <?php endforeach; ?>
                                 </select>
                                 <p class="description">
-                                    <?php _e('Select user roles that can view all pages without being redirected to login, even if they are not excluded pages.', 'force-login-view'); ?>
+                                    <?php esc_html_e('Select user roles that can view all pages without being redirected to login, even if they are not excluded pages.', 'force-login-view'); ?>
                                 </p>
                             </div>
                         </div>
@@ -2005,12 +2026,12 @@ class Force_Login_View {
                     <!-- Bypass Users Section -->
                     <div class="flv-card">
                         <div class="flv-card-header" style="display: flex; justify-content: space-between; align-items: center;">
-                            <h2 style="margin: 0;"><?php _e('Bypass Users', 'force-login-view'); ?></h2>
-                            <?php submit_button(__('Save Changes', 'force-login-view'), 'primary', 'flv_save_settings', false); ?>
+                            <h2 style="margin: 0;"><?php esc_html_e('Bypass Users', 'force-login-view'); ?></h2>
+                            <?php submit_button(esc_html__('Save Changes', 'force-login-view'), 'primary', 'flv_save_settings', false); ?>
                         </div>
                         <div class="flv-card-body">
                             <div class="flv-form-group">
-                                <label for="flv_bypass_users"><?php _e('Specific Users That Can Bypass Login', 'force-login-view'); ?></label>
+                                <label for="flv_bypass_users"><?php esc_html_e('Specific Users That Can Bypass Login', 'force-login-view'); ?></label>
                                 <select id="flv_bypass_users" name="flv_bypass_users[]" multiple="multiple">
                                     <?php foreach ($all_users as $user) : ?>
                                         <option value="<?php echo esc_attr($user->ID); ?>" <?php selected(in_array($user->ID, $bypass_users)); ?>>
@@ -2019,7 +2040,7 @@ class Force_Login_View {
                                     <?php endforeach; ?>
                                 </select>
                                 <p class="description">
-                                    <?php _e('Select specific users that can view all pages without being redirected to login, regardless of their role or page exclusions.', 'force-login-view'); ?>
+                                    <?php esc_html_e('Select specific users that can view all pages without being redirected to login, regardless of their role or page exclusions.', 'force-login-view'); ?>
                                 </p>
                             </div>
                         </div>
@@ -2028,34 +2049,34 @@ class Force_Login_View {
                     <!-- Redirect Settings Section -->
                     <div class="flv-card">
                         <div class="flv-card-header" style="display: flex; justify-content: space-between; align-items: center;">
-                            <h2 style="margin: 0;"><?php _e('Redirect Settings', 'force-login-view'); ?></h2>
-                            <?php submit_button(__('Save Changes', 'force-login-view'), 'primary', 'flv_save_settings', false); ?>
+                            <h2 style="margin: 0;"><?php esc_html_e('Redirect Settings', 'force-login-view'); ?></h2>
+                            <?php submit_button(esc_html__('Save Changes', 'force-login-view'), 'primary', 'flv_save_settings', false); ?>
                         </div>
                         <div class="flv-card-body">
                             <div class="flv-form-group">
                                 <label>
                                     <input type="radio" name="flv_redirect_back" value="1" <?php checked($redirect_back, '1'); ?>>
-                                    <?php _e('Redirect back to original page after login', 'force-login-view'); ?>
+                                    <?php esc_html_e('Redirect back to original page after login', 'force-login-view'); ?>
                                 </label>
                                 <p class="description" style="margin-top: 8px;">
-                                    <?php _e('Users will be redirected back to the page they were trying to access after logging in.', 'force-login-view'); ?>
+                                    <?php esc_html_e('Users will be redirected back to the page they were trying to access after logging in.', 'force-login-view'); ?>
                                 </p>
                             </div>
                             <div class="flv-form-group">
                                 <label>
                                     <input type="radio" name="flv_redirect_back" value="0" <?php checked($redirect_back, '0'); ?>>
-                                    <?php _e('Use custom redirect URL', 'force-login-view'); ?>
+                                    <?php esc_html_e('Use custom redirect URL', 'force-login-view'); ?>
                                 </label>
                                 <input type="url" name="flv_custom_redirect_url" value="<?php echo esc_attr($custom_redirect); ?>" placeholder="<?php echo esc_attr(home_url()); ?>" style="width: 100%; max-width: 500px; margin-top: 8px; padding: 8px; border: 1px solid var(--google-border); border-radius: 4px;">
                                 <p class="description">
-                                    <?php _e('Enter a custom URL where users should be redirected after login. Leave empty to redirect to homepage.', 'force-login-view'); ?>
+                                    <?php esc_html_e('Enter a custom URL where users should be redirected after login. Leave empty to redirect to homepage.', 'force-login-view'); ?>
                                 </p>
                             </div>
                             <div class="flv-form-group">
-                                <label for="flv_custom_login_url"><?php _e('Custom Login Page URL', 'force-login-view'); ?></label>
+                                <label for="flv_custom_login_url"><?php esc_html_e('Custom Login Page URL', 'force-login-view'); ?></label>
                                 <input type="url" id="flv_custom_login_url" name="flv_custom_login_url" value="<?php echo esc_attr($custom_login_url); ?>" placeholder="<?php echo esc_attr(wp_login_url()); ?>" style="width: 100%; max-width: 500px; padding: 8px; border: 1px solid var(--google-border); border-radius: 4px;">
                                 <p class="description">
-                                    <?php _e('Optional: Enter a custom login page URL. Leave empty to use the default WordPress login page.', 'force-login-view'); ?>
+                                    <?php esc_html_e('Optional: Enter a custom login page URL. Leave empty to use the default WordPress login page.', 'force-login-view'); ?>
                                 </p>
                             </div>
                         </div>
@@ -2064,15 +2085,15 @@ class Force_Login_View {
                     <!-- Login Message Section -->
                     <div class="flv-card">
                         <div class="flv-card-header" style="display: flex; justify-content: space-between; align-items: center;">
-                            <h2 style="margin: 0;"><?php _e('Login Message', 'force-login-view'); ?></h2>
-                            <?php submit_button(__('Save Changes', 'force-login-view'), 'primary', 'flv_save_settings', false); ?>
+                            <h2 style="margin: 0;"><?php esc_html_e('Login Message', 'force-login-view'); ?></h2>
+                            <?php submit_button(esc_html__('Save Changes', 'force-login-view'), 'primary', 'flv_save_settings', false); ?>
                         </div>
                         <div class="flv-card-body">
                             <div class="flv-form-group">
-                                <label for="flv_login_message"><?php _e('Custom Login Message', 'force-login-view'); ?></label>
+                                <label for="flv_login_message"><?php esc_html_e('Custom Login Message', 'force-login-view'); ?></label>
                                 <textarea id="flv_login_message" name="flv_login_message" rows="3" style="width: 100%; padding: 8px; border: 1px solid var(--google-border); border-radius: 4px; font-family: inherit;"><?php echo esc_textarea($login_message); ?></textarea>
                                 <p class="description">
-                                    <?php _e('Optional: Add a custom message that will be displayed on the login page. Leave empty to use default WordPress login page.', 'force-login-view'); ?>
+                                    <?php esc_html_e('Optional: Add a custom message that will be displayed on the login page. Leave empty to use default WordPress login page.', 'force-login-view'); ?>
                                 </p>
                             </div>
                         </div>
@@ -2081,17 +2102,17 @@ class Force_Login_View {
                     <!-- Bypass Key Section -->
                     <div class="flv-card">
                         <div class="flv-card-header" style="display: flex; justify-content: space-between; align-items: center;">
-                            <h2 style="margin: 0;"><?php _e('Bypass Key', 'force-login-view'); ?></h2>
-                            <?php submit_button(__('Save Changes', 'force-login-view'), 'primary', 'flv_save_settings', false); ?>
+                            <h2 style="margin: 0;"><?php esc_html_e('Bypass Key', 'force-login-view'); ?></h2>
+                            <?php submit_button(esc_html__('Save Changes', 'force-login-view'), 'primary', 'flv_save_settings', false); ?>
                         </div>
                         <div class="flv-card-body">
                             <div class="flv-form-group">
-                                <label for="flv_bypass_key"><?php _e('Bypass Key', 'force-login-view'); ?></label>
-                                <input type="text" id="flv_bypass_key" name="flv_bypass_key" value="<?php echo esc_attr($bypass_key); ?>" placeholder="<?php _e('Enter a secret key', 'force-login-view'); ?>" style="width: 100%; max-width: 500px; padding: 8px; border: 1px solid var(--google-border); border-radius: 4px;">
+                                <label for="flv_bypass_key"><?php esc_html_e('Bypass Key', 'force-login-view'); ?></label>
+                                <input type="text" id="flv_bypass_key" name="flv_bypass_key" value="<?php echo esc_attr($bypass_key); ?>" placeholder="<?php esc_html_e('Enter a secret key', 'force-login-view'); ?>" style="width: 100%; max-width: 500px; padding: 8px; border: 1px solid var(--google-border); border-radius: 4px;">
                                 <p class="description">
-                                    <?php _e('Set a secret key to allow bypassing login by adding ?flv_bypass=YOUR_KEY to any URL. Leave empty to disable this feature.', 'force-login-view'); ?>
+                                    <?php esc_html_e('Set a secret key to allow bypassing login by adding ?flv_bypass=YOUR_KEY to any URL. Leave empty to disable this feature.', 'force-login-view'); ?>
                                     <?php if (!empty($bypass_key)) : ?>
-                                        <br><strong><?php _e('Example:', 'force-login-view'); ?></strong> <code><?php echo esc_url(home_url('/?flv_bypass=' . $bypass_key)); ?></code>
+                                        <br><strong><?php esc_html_e('Example:', 'force-login-view'); ?></strong> <code><?php echo esc_url(home_url('/?flv_bypass=' . $bypass_key)); ?></code>
                                     <?php endif; ?>
                                 </p>
                             </div>
@@ -2101,25 +2122,25 @@ class Force_Login_View {
                     <!-- Maintenance Mode Section -->
                     <div class="flv-card">
                         <div class="flv-card-header" style="display: flex; justify-content: space-between; align-items: center;">
-                            <h2 style="margin: 0;"><?php _e('Maintenance Mode', 'force-login-view'); ?></h2>
-                            <?php submit_button(__('Save Changes', 'force-login-view'), 'primary', 'flv_save_settings', false); ?>
+                            <h2 style="margin: 0;"><?php esc_html_e('Maintenance Mode', 'force-login-view'); ?></h2>
+                            <?php submit_button(esc_html__('Save Changes', 'force-login-view'), 'primary', 'flv_save_settings', false); ?>
                         </div>
                         <div class="flv-card-body">
                             <div class="flv-form-group">
                                 <label>
                                     <input type="checkbox" name="flv_maintenance_mode" value="1" <?php checked($maintenance_mode, '1'); ?>>
-                                    <?php _e('Enable Maintenance Mode', 'force-login-view'); ?>
+                                    <?php esc_html_e('Enable Maintenance Mode', 'force-login-view'); ?>
                                 </label>
                                 <p class="description">
-                                    <?php _e('Show a maintenance page instead of redirecting to login. Useful for scheduled maintenance.', 'force-login-view'); ?>
+                                    <?php esc_html_e('Show a maintenance page instead of redirecting to login. Useful for scheduled maintenance.', 'force-login-view'); ?>
                                 </p>
                             </div>
                             <div class="flv-form-group">
-                                <label for="flv_maintenance_title"><?php _e('Maintenance Title', 'force-login-view'); ?></label>
+                                <label for="flv_maintenance_title"><?php esc_html_e('Maintenance Title', 'force-login-view'); ?></label>
                                 <input type="text" id="flv_maintenance_title" name="flv_maintenance_title" value="<?php echo esc_attr($maintenance_title); ?>" style="width: 100%; max-width: 500px; padding: 8px; border: 1px solid var(--google-border); border-radius: 4px;">
                             </div>
                             <div class="flv-form-group">
-                                <label for="flv_maintenance_message"><?php _e('Maintenance Message', 'force-login-view'); ?></label>
+                                <label for="flv_maintenance_message"><?php esc_html_e('Maintenance Message', 'force-login-view'); ?></label>
                                 <textarea id="flv_maintenance_message" name="flv_maintenance_message" rows="3" style="width: 100%; padding: 8px; border: 1px solid var(--google-border); border-radius: 4px; font-family: inherit;"><?php echo esc_textarea($maintenance_message); ?></textarea>
                             </div>
                         </div>
@@ -2130,15 +2151,15 @@ class Force_Login_View {
                     <!-- Submit Section - Full Width -->
                     <div class="flv-submit-section flv-full-width">
                         <p class="description" style="margin: 0;">
-                            <?php _e('Changes will take effect immediately after saving.', 'force-login-view'); ?>
+                            <?php esc_html_e('Changes will take effect immediately after saving.', 'force-login-view'); ?>
                         </p>
-                        <?php submit_button(__('Save', 'force-login-view'), 'primary large', 'flv_save_settings', false); ?>
+                        <?php submit_button(esc_html__('Save', 'force-login-view'), 'primary large', 'flv_save_settings', false); ?>
                     </div>
                 </form>
                 
                 <!-- Powered by Absoluto Designs -->
                 <div class="flv-powered-by">
-                    <p><?php _e('Powered by:', 'force-login-view'); ?> <a href="http://absolutodesigns.com/plugins" target="_blank" rel="noopener noreferrer">Absoluto Designs</a></p>
+                    <p><?php esc_html_e('Powered by:', 'force-login-view'); ?> <a href="http://absolutodesigns.com/plugins" target="_blank" rel="noopener noreferrer">Absoluto Designs</a></p>
                 </div>
             </div>
         </div>
